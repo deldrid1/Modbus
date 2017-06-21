@@ -5,7 +5,6 @@
 class Modbus485Master extends ModbusMaster {
     static MINIMUM_RESPONSE_LENGTH = 5;
     _uart = null;
-    _rts = null;
     _timeout = null;
     _responseTimer = null;
     _receiveBuffer = null;
@@ -20,16 +19,19 @@ class Modbus485Master extends ModbusMaster {
     // Constructor for Modbus485Master
     //
     // @param  {object} uart - The UART object
-    // @param  {object} rts - The pin used as RTS
     // @param  {table} params - The table contains all the arugments the constructor expects
     // @item  {integer} baudRate - 19200 bit/sec by dafult
-    // @item  {integer} dateBits - Word size , 8 bit by default
-    // @item  {enum} parity - PARITY_NONE by default
+    // @item  {integer} dateBits - Word size, 8 bit by default
+    // @item  {enum} parity - Electric Imp UART Parity constant, PARITY_NONE by default
     // @item  {integer} stopBits - 1 bit by default
+    // @item  {object} rts - The imp hardware.pin (compatible) object used as RTS, not used by default
+    // @item  {object} rtsPolarity - The polarity of rts, set to 1 (active high) by default.  May also be 0 (active low)
+    // @item  {object} rtsPredelay - Integer Optional pre-delay in microseconds for rts active during uart TX, 2 by default
+    // @item  {object} rtsPostdelay - Integer Optional post-delay in microseconds for rts active during uart TX, 2 by default
     // @item  {float} timeout - 1.0 second by default
     // @item  {bool} debug - false by default. If enabled, the outgoing and incoming ADU will be printed for debugging purpose
     //
-    constructor(uart, rts, params = {}) {
+    constructor(uart, params = {}) {
         base.constructor(("debug" in params) ? params.debug : false);
         if (!("CRC16" in getroottable())) {
             throw "Must include CRC16 library v1.0.0+";
@@ -37,17 +39,24 @@ class Modbus485Master extends ModbusMaster {
         if (!("ModbusRTU" in getroottable())) {
             throw "Must include ModbusRTU library v1.0.0+";
         }
-        local baudRate = ("baudRate" in params) ? params.baudRate : 19200;
-        local dataBits = ("dataBits" in params) ? params.dataBits : 8;
-        local parity = ("parity" in params) ? params.parity : PARITY_NONE;
-        local stopBits = ("stopBits" in params) ? params.stopBits : 1;
-        _timeout = ("timeout" in params) ? params.timeout : 1.0;
+        local baudRate      = ("baudRate" in params)        ? params.baudRate       : 19200;
+        local dataBits      = ("dataBits" in params)        ? params.dataBits       : 8;
+        local parity        = ("parity" in params)          ? params.parity         : PARITY_NONE;
+        local stopBits      = ("stopBits" in params)        ? params.stopBits       : 1;
+        local rts           = ("rts" in params)             ? params.rts            : null;
+        local rtsPolarity   = ("rtsPolarity" in params)     ? params.rtsPolarity    : 1                 //Active High
+        local rtsPredelay   = ("rtsPredelay" in params)     ? params.rtsPredelay    : 2                 //integer microseconds
+        local rtsPostdelay  = ("rtsPostdelay" in params)    ? params.rtsPostdelay   : 2                 //integer microseconds
+        _timeout            = ("timeout" in params)         ? params.timeout        : 1.0;              //float seconds
+
         _receiveBuffer = blob();
         _uart = uart;
-        _rts = rts;
         _queue = [];
         _uart.configure(baudRate, dataBits, parity, stopBits, NO_CTSRTS, _uartCallback.bindenv(this));
-        _rts.configure(DIGITAL_OUT, 0);
+        
+        if(rts){
+            _uart.settxactive(rts, rtsPolarity, rtsPredelay, rtsPostdelay)
+        }
     }
 
     //
@@ -314,13 +323,7 @@ class Modbus485Master extends ModbusMaster {
         }
         _callback = properties.callback;
         local frame = _createADU(PDU);
-        local rw = _rts.write.bindenv(_rts);
-        local uw = _uart.write.bindenv(_uart);
-        local uf = _uart.flush.bindenv(_uart);
-        rw(1);
-        uw(frame);
-        uf();
-        rw(0);
+        _uart.write(frame);
         _log(frame, "Outgoing ADU : ");
         _responseTimer = _responseTimeoutFactory(_timeout);
     }
