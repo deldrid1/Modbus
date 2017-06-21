@@ -343,10 +343,11 @@ class ModbusRTU {
     //
     static function _readData(PDU, expectedResType, quantity) {
         PDU.seek(2);
-        local result = [];
+        
         switch (expectedResType) {
             case FUNCTION_CODES.readCoils.fcode:
             case FUNCTION_CODES.readInputs.fcode:
+                local result = [];
                 while (!PDU.eos()) {
                     local byte = PDU.readn('b');
                     local bitmask = 1;
@@ -359,16 +360,22 @@ class ModbusRTU {
                         }
                     }
                 }
+                return result
+                // PDU = PDU.readblob(quantity/8 + 1)
+                // PDU.seek(0)
+                // return PDU
                 break;
             case FUNCTION_CODES.readWriteMultipleRegisters.fcode:
             case FUNCTION_CODES.readHoldingRegs.fcode:
             case FUNCTION_CODES.readInputRegs.fcode:
-                while (result.len() != quantity) {
-                    result.push(swap2(PDU.readn('w')));
-                }
+                // while (result.len() != quantity) {   // Parse out into array of 16-bit unsigned integers
+                //     result.push(swap2(PDU.readn('w')));
+                // }
+                PDU = PDU.readblob(quantity*2) 
+                PDU.seek(0)
+                return PDU
                 break;
         }
-        return result;
     }
 
     //
