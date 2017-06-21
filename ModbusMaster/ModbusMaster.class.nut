@@ -210,6 +210,7 @@ class ModbusMaster {
                 writeValues.writen(swap2(values ? 0xFF00 : 0), 'w');
                 break;
             case "blob":
+            case "string": //expect a byte string such as "\x00\x01", which unlike a blob can be stored as a const (and even occupy no RAM and exclusively flash on imp001-003!)
                 writeValues = values;
                 break;
             case "array":
